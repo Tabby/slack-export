@@ -1519,7 +1519,7 @@ def filterConversationsByName(channelsOrGroups, channelOrGroupNames):
 
 def promptForPublicChannels(channels):
     channelNames = [channel['name'] for channel in channels]
-    selectedChannels = pick(channelNames, 'Select the Public Channels you want to export:', multi_select=True)
+    selectedChannels = pick(channelNames, 'Select the Public Channels you want to export:', multiselect=True)
     return [channels[index] for channelName, index in selectedChannels]
 
 # fetch and write history for all public channels
@@ -1579,7 +1579,7 @@ def filterDirectMessagesByUserNameOrId(dms, userNamesOrIds):
 
 def promptForDirectMessages(dms):
     dmNames = [userNamesById.get(dm['user'], dm['user'] + " (name unknown)") for dm in dms]
-    selectedDms = pick(dmNames, 'Select the 1:1 DMs you want to export:', multi_select=True)
+    selectedDms = pick(dmNames, 'Select the 1:1 DMs you want to export:', multiselect=True)
     return [dms[index] for dmName, index in selectedDms]
 
 # fetch and write history for all direct message conversations
@@ -1603,7 +1603,7 @@ def fetchDirectMessages(dms):
 
 def promptForGroups(groups):
     groupNames = [group['name'] for group in groups]
-    selectedGroups = pick(groupNames, 'Select the Private Channels and Group DMs you want to export:', multi_select=True)
+    selectedGroups = pick(groupNames, 'Select the Private Channels and Group DMs you want to export:', multiselect=True)
     return [groups[index] for groupName, index in selectedGroups]
 
 # fetch and write history for specific private channel
