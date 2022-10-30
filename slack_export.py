@@ -1665,18 +1665,35 @@ def doTestAuth():
 #   
 def bootstrapKeyValues():
     global users, channels, groups, dms
+    page_size = 200
      
     users = slack.users.list().body['members']
     print("Found {0} Users".format(len(users)))
     sleep(3.05)
 
-    channels = slack.conversations.list(limit = 1000, types=('public_channel')).body['channels']
-    print("Found {0} Public Channels".format(len(channels)))
-    # think mayne need to retrieve channel memberships for the slack-export-viewer to work
-    for n in range(len(channels)):
-        channels[n]["members"] = slack.conversations.members(limit=1000, channel=channels[n]['id']).body['members']
-        print("Retrieved members of {0}".format(channels[n]['name']))
-    sleep(3.05)
+    next_cursor = None
+    page = 0
+    while next_cursor != "":
+        response = None
+        if next_cursor is None:
+            response = slack.conversations.list(limit=page_size, types=('public_channel'))
+        else:
+            url_encoded_cursor = urllib.quote(next_cursor)
+            print("Using cursor: {}".format(next_cursor))
+            response = slack.conversations.list(limit=page_size, cursor=next_cursor, types=('public_channel'))
+        returned_channels = response.body['channels']
+        next_cursor = response.body['response_metadata']['next_cursor']
+        print("Page {}".format(page))
+        print("Found {0} Public Channels".format(len(returned_channels)))
+        print("Next_cursor: {}".format(next_cursor))
+        # think maybe need to retrieve channel memberships for the slack-export-viewer to work
+        for n in range(0, len(returned_channels)):
+            returned_channels[n]["members"] = slack.conversations.members(limit=1000, channel=returned_channels[n]['id']).body['members']
+            print("Retrieved members of {0}".format(returned_channels[n]['name']))
+        channels.extend(returned_channels)
+        sleep(3.05)
+        page += 1
+    print("Total number of channels: {}".format(len(channels)))
 
     groups = slack.conversations.list(limit = 1000, types=('private_channel', 'mpim')).body['channels']
     print("Found {0} Private Channels or Group DMs".format(len(groups)))
