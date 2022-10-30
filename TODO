@@ -1,0 +1,4 @@
+* Refactor pagination out into API classes and use for all supported methods
+* Refactor API classes into separate files
+* Add --update option to reuse an existing dump and add to it instead of dumping everything from scratch each time
+
