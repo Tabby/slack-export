@@ -1678,7 +1678,6 @@ def bootstrapKeyValues():
         if next_cursor is None:
             response = slack.conversations.list(limit=page_size, types=('public_channel'))
         else:
-            url_encoded_cursor = urllib.quote(next_cursor)
             print("Using cursor: {}".format(next_cursor))
             response = slack.conversations.list(limit=page_size, cursor=next_cursor, types=('public_channel'))
         returned_channels = response.body['channels']
