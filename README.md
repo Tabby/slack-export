@@ -1,19 +1,18 @@
 # Slack Exporter
-Nooj addition, Jan 29, 2022: Fixed a small infinite loop bug.
 
+Nooj addition, Jan 29, 2022: Fixed a small infinite loop bug.
 
 **Finally got it working again! (Still issues with slack-export-viewer compatibility though.)**
 Implemented Slack's conversations API (since almost all previous API methods in use were...thoroughly deprecated).
-Added threads/replies...(does slow things down) and tweaked sleep to avoid rate limiting (kludge-y, but, should work for now). Added membership info to channels.json and fixed directory naming. 
+Added threads/replies...(does slow things down) and tweaked sleep to avoid rate limiting (kludge-y, but, should work for now). Added membership info to channels.json and fixed directory naming.
 
 Fork history:
-- https://github.com/cowsaysfoo/slack-export 
-- https://github.com/trianglee/slack-export  
-- https://github.com/chr1spy1/slack-export 
-- https://github.com/andriuspetrauskis/slack-export 
-- https://github.com/zach-snell/slack-export 
 
-
+- <https://github.com/cowsaysfoo/slack-export>
+- <https://github.com/trianglee/slack-export>
+- <https://github.com/chr1spy1/slack-export>
+- <https://github.com/andriuspetrauskis/slack-export>
+- <https://github.com/zach-snell/slack-export>
 
 ## Description
 
@@ -25,7 +24,7 @@ This user centric history gathering is nice because the official slack data expo
 
 There may be limitations on what you can export based on the paid status of your slack account.
 
-This use of the API is blessed by Slack : https://get.slack.help/hc/en-us/articles/204897248
+This use of the API is blessed by Slack : <https://get.slack.help/hc/en-us/articles/204897248>
 
 "If you want to export the contents of your own private groups and direct messages
 please see our API documentation."
@@ -38,20 +37,21 @@ Up-to-date step-by-step instructions can be found in [STEP-BY-STEP.md](STEP-BY-S
 
 A guide to get your client token and cookie can be found on the ircslackd repo, see link below:
 
-https://github.com/adsr/irslackd/wiki/IRC-Client-Config#xoxc-tokens
+<https://github.com/adsr/irslackd/wiki/IRC-Client-Config#xoxc-tokens>
 
 I'm not certain which cookies are necessary but there is a cookie table provided by slack here:
 
-https://slack.com/intl/en-au/cookie-table#
+<https://slack.com/intl/en-au/cookie-table>#
 
 ## Dependencies
 
-```
+```console
 pip install -r requirements.txt
 ```
 
 ## Basic Usage
-```
+
+```console
 # Export all Channels and DMs
 python slack_export.py --token xoxc-123... --cookie "b=...; d=...; x=..."
 
@@ -71,30 +71,31 @@ This script exports **all** Channels and DMs by default.
 
 To export only certain conversations, use one or more of the following arguments:
 
-* `--publicChannels [CHANNEL_NAME [CHANNEL_NAME ...]]`\
+- `--publicChannels [CHANNEL_NAME [CHANNEL_NAME ...]]`\
 Export Public Channels\
 (optionally filtered by the given channel names)
 
-* `--groups [GROUP_NAME [GROUP_NAME ...]]`\
+- `--groups [GROUP_NAME [GROUP_NAME ...]]`\
 Export Private Channels and Group DMs\
 (optionally filtered by the given group names)
 
-* `--directMessages [USER_NAME [USER_NAME ...]]`\
+- `--directMessages [USER_NAME [USER_NAME ...]]`\
 Export 1:1 DMs\
 (optionally filtered by the given user names)
 
-* `--prompt`\
+- `--prompt`\
 Prompt you to select the conversations to export\
 (Any channel/group/user names specified with the other arguments take precedence.)
 
-* `--excludeArchived`\
+- `--excludeArchived`\
 Exclude any channels that have been archived
 
-* `--excludeNonMember`\
+- `--excludeNonMember`\
 Exclude any public channels for which the user is not a member
 
 ### Examples
-```
+
+```console
 # Export only Public Channels
 python slack_export.py --token xoxc-123... --cookie "b=...; d=...; x=..." --publicChannels
 
@@ -119,6 +120,7 @@ python slack_export.py --token xoxc-123... --cookie "b=...; d=...; x=..." --publ
 # Export only 1:1 DMs with jane_smith and the Public Channels you select when prompted
 python slack_export.py --token xoxc-123... --cookie "b=...; d=...; x=..." --directMessages jane_smith --publicChannels --prompt
 ```
+
 This script is provided in an as-is state and I guarantee no updates or quality of service at this time.
 
 ## Downloading files and view them inside slack-export-viewer
@@ -130,7 +132,8 @@ replace the URLs inside the export to point to the downloaded files assuming the
 `/static/files.slack.com/` from the slack-export-viewer webserver.
 
 ### Example including linking files.slack.com with `slack-export-viewer`
-```
+
+```console
 python slack_export.py --token xoxc-123... --cookie "b=...; d=...; x=..." --zip slack_export --downloadSlackFiles
 
 # Clone slack-export-viewer from github
@@ -144,16 +147,16 @@ ln -s ../../../slack-export/files.slack.com slack-export-viewer/slackviewer/stat
 ./slack-export-viewer/app.py -z slack-export/slack_export.zip
 ```
 
-# Recommended related libraries
+## Recommended related libraries
 
 This is designed to function with 'slack-export-viewer'.
-  ```
+
+  ```console
   pip install slack-export-viewer
   ```
 
 Then you can execute the viewer as documented
-```
+
+```console
 slack-export-viewer -z zipArchive.zip
 ```
-
-

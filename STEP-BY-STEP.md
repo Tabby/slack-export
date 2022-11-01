@@ -3,38 +3,38 @@
 ## Install
 
 1. Create and move into a destination directory for the archive and downloaders -
-   
+
 1. Clone the "slack-export" repo -
 
-   ```
+   ```console
    git clone https://github.com/nooj/slack-export.git
    ```
-   
+
 1. Create virtualenv -
 
    Windows -
 
-   ```
+   ```console
    py -3 -m virtualenv venv
    ```
 
    Linux -
 
-   ```
+   ```console
    python3 -m virtualenv venv
    ```
-   
+
 1. Install requirements -
 
    Windows -
 
-   ```
+   ```console
    venv\scripts\pip install -r slack-export\requirements.txt
    ```
 
    Linux -
 
-   ```
+   ```console
    venv/bin/pip install -r slack-export/requirements.txt
    ```
 
@@ -42,38 +42,38 @@
 
    Windows -
 
-   ```
+   ```console
    venv\scripts\pip install install windows-curses
    ```
 
 1. Windows only - increase maximal path length limitation.
 
    Done by adding a registry key named `LongPathsEnabled` of type
-   `DWORD` and value `1`, under 
+   `DWORD` and value `1`, under
    `Computer\HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem`.
 
    This *might* be needed if there are long file names in static files
    stored by Slack.
 
-   See more details in https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation.
+   See more details in <https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation>.
 
 1. Install "slack-export-viewer" -
 
    Windows -
 
-   ```
+   ```console
    venv\scripts\pip install git+https://github.com/trianglee/slack-export-viewer.git
    ```
 
    Linux -
 
-   ```
+   ```console
    venv/bin/pip install git+https://github.com/trianglee/slack-export-viewer.git
    ```
 
 ## Obtain Token and Cookies
 
-1. In a browser with developer tools active, open https://YOUR-SLACK-WORKSPACE.slack.com/customize.
+1. In a browser with developer tools active, open <https://YOUR-SLACK-WORKSPACE.slack.com/customize>.
 
 1. Sign in with SSO (if needed).
 
@@ -86,49 +86,53 @@
    `TS.boot_data.api_token`
 
    (you might need to confirm copy&paste to Firefox)
-   
-1. Copy the value printed. It should be of the form `"xoxc-..."`.  
+
+1. Copy the value printed. It should be of the form `"xoxc-..."`.
    This is your token.
 
 1. Set the token as an environment variable -
 
    Windows -
 
-   ```
+   ```console
    set SLACK_TOKEN="xoxc-..."
    ```
 
    Linux -
 
-   ```
+   ```console
    SLACK_TOKEN="xoxc-..."
    ```
+
    or
-   ```
+
+   ```console
    export SLACK_TOKEN="xoxc-..."
    ```
 
 1. Select the "Storage" tab.
 
 1. Find the "d" cookie, and copy its value. Add a "d=" at the beginning, so it would
-   end up being of the form `d=CD0I...`.  
+   end up being of the form `d=CD0I...`.
    This is your cookie.
 
 1. Set the cookie as an environment variable -
 
    Windows -
 
-   ```
+   ```console
    set SLACK_COOKIE="d=CD0I..."
    ```
 
    Linux -
 
-   ```
+   ```console
    SLACK_COOKIE="d=CD0I..."
    ```
+
    or
-   ```
+
+   ```console
    export SLACK_COOKIE="d=CD0I..."
    ```
 
@@ -139,33 +143,33 @@
 
    Windows -
 
-   ```
-   venv\scripts\python slack_export.py --token %SLACK_TOKEN% --cookie %SLACK_COOKIE% --dryRun 
+   ```console
+   venv\scripts\python slack_export.py --token %SLACK_TOKEN% --cookie %SLACK_COOKIE% --dryRun
    ```
 
    Linux -
 
-   ```
-   venv/bin/python slack_export.py --token $SLACK_TOKEN --cookie $SLACK_COOKIE --dryRun 
+   ```console
+   venv/bin/python slack_export.py --token $SLACK_TOKEN --cookie $SLACK_COOKIE --dryRun
    ```
 
 1. Export all direct-messages and all static files (see [Exporting Options](#exporting-options) for other options) -
 
    Windows -
 
-   ```
-   venv\scripts\python slack_export.py --token %SLACK_TOKEN% --cookie %SLACK_COOKIE%  --directMessages --downloadSlackFiles 
+   ```console
+   venv\scripts\python slack_export.py --token %SLACK_TOKEN% --cookie %SLACK_COOKIE%  --directMessages --downloadSlackFiles
    ```
 
    Linux -
 
-   ```
+   ```console
    venv/bin/python slack_export.py \
      --token $SLACK_TOKEN --cookie $SLACK_COOKIE \
      --groups \
      --directMessages \
      --publicChannels \
-     --downloadSlackFiles 
+     --downloadSlackFiles
    ```
 
    The messages are exported to a directory of the form `YYYYMMDD-HHMMSS-slack_export`.
@@ -175,13 +179,13 @@
 
    Windows (copy) -
 
-   ```
+   ```console
    robocopy /mir files.slack.com venv\Lib\site-packages\slackviewer\static\files.slack.com\
    ```
 
    Linux (link) -
 
-   ```
+   ```console
    ln -s $(pwd)/files.slack.com venv/lib/python3*/site-packages/slackviewer/static
    ```
 
@@ -189,13 +193,13 @@
 
    Windows -
 
-   ```
+   ```console
    venv\scripts\slack-export-viewer -z <EXPORT-DIRECTORY>
    ```
 
    Linux -
 
-   ```
+   ```console
    venv/bin/slack-export-viewer -z <EXPORT-DIRECTORY>
    ```
 
@@ -204,5 +208,5 @@
 * To export all public channels, use `--publicChannels`.
 * To export all private channels and group messages, use `--groups`.
 * To export all direct messages, use `--directMessages`.
-* To export specific channels or direct messages, add a list following each parameter 
+* To export specific channels or direct messages, add a list following each parameter
   (like `--directMessages some.user1 some.user2 --groups channel1 channel2`).
