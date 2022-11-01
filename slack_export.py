@@ -421,73 +421,51 @@ def doTestAuth():
         teamName, currentUser))
     return testAuth
 
+def getChannelMembers(channel):
+    page_size = 200
+    next_cursor = None
+    members = []
+    while next_cursor != "":
+        response = slack.conversations.members(limit=page_size, cursor=next_cursor, channel=channel['id'])
+        members.extend(response.body['members'])
+        next_cursor = response.body['response_metadata']['next_cursor']
+    return members
+
+def getAllChannels(types, getMembers=True):
+    page_size = 200
+    next_cursor = None
+    channels = []
+    while next_cursor != "":
+        response = slack.conversations.list(limit=page_size, cursor=next_cursor, types=types)
+        returned_channels = response.body['channels']
+        next_cursor = response.body['response_metadata']['next_cursor']
+        if (getMembers):
+            # think maybe need to retrieve channel memberships for the slack-export-viewer to work
+            for n in range(0, len(returned_channels)):
+                returned_channels[n]["members"] = getChannelMembers(returned_channels[n])
+                print("Retrieved members of {0}".format(returned_channels[n]['name']))
+        channels.extend(returned_channels)
+        sleep(3.05)
+    return channels
+
 # Since Slacker does not Cache.. populate some reused lists
 # TODO:
 #   1. Only populate data for lists that will be used in export.
-#   2. Allow adjustable limits (greater or less than 1000).
-#      Fork by veqryn appears to do this for users:
-#        - users = slack.users.list().body['members']
-#        - print(u"Found {0} Users".format(len(users)))
-#        -
-#        + users_list = slack.users.list(limit=500)
-#        + users = users_list.body['members']
-#        + while len(users_list.body['members']) >= 500:
-#        +     users_list = slack.users.list(limit=500, cursor=users_list.body['response_metadata']['next_cursor'])
-#        +     users.extend(users_list.body['members'])
-#        +     sleep(1)  # crude rate limit
-#        +
-#        + print("Found {0} Users".format(len(users)))
-#
-
-
 def bootstrapKeyValues():
     global users, channels, groups, dms
-    page_size = 200
 
     users = slack.users.list().body['members']
     print("Found {0} Users".format(len(users)))
     sleep(3.05)
 
-    next_cursor = None
-    page = 0
-    while next_cursor != "":
-        response = None
-        if next_cursor is None:
-            response = slack.conversations.list(
-                limit=page_size, types=('public_channel'))
-        else:
-            print("Using cursor: {}".format(next_cursor))
-            response = slack.conversations.list(
-                limit=page_size, cursor=next_cursor, types=('public_channel'))
-        returned_channels = response.body['channels']
-        next_cursor = response.body['response_metadata']['next_cursor']
-        print("Page {}".format(page))
-        print("Found {0} Public Channels".format(len(returned_channels)))
-        print("Next_cursor: {}".format(next_cursor))
-        # think maybe need to retrieve channel memberships for the slack-export-viewer to work
-        for n in range(0, len(returned_channels)):
-            returned_channels[n]["members"] = slack.conversations.members(
-                limit=1000, channel=returned_channels[n]['id']).body['members']
-            print("Retrieved members of {0}".format(
-                returned_channels[n]['name']))
-        channels.extend(returned_channels)
-        sleep(3.05)
-        page += 1
-    print("Total number of channels: {}".format(len(channels)))
+    channels = getAllChannels(types=('public_channel'))
+    print("Found {0} Public Channels".format(len(channels)))
 
-    groups = slack.conversations.list(limit=1000, types=(
-        'private_channel', 'mpim')).body['channels']
+    groups = getAllChannels(types=('private_channel', 'mpim'))
     print("Found {0} Private Channels or Group DMs".format(len(groups)))
-    # need to retrieve channel memberships for the slack-export-viewer to work
-    for n in range(len(groups)):
-        groups[n]["members"] = slack.conversations.members(
-            limit=1000, channel=groups[n]['id']).body['members']
-        print("Retrieved members of {0}".format(groups[n]['name']))
-    sleep(3.05)
 
-    dms = slack.conversations.list(limit=1000, types=('im')).body['channels']
+    dms = getAllChannels(types=('im'), getMembers=False)
     print("Found {0} 1:1 DM conversations\n".format(len(dms)))
-    sleep(3.05)
 
     getUserMap()
 
