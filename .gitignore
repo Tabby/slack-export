@@ -106,3 +106,6 @@ venv.bak/
 # slack-export related files
 files.slack.com
 *-slack_export/
+
+# VS Code
+.vscode/
