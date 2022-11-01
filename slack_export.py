@@ -4,6 +4,7 @@ import os
 import shutil
 import sys
 from datetime import datetime
+from typing import List
 from pick import pick
 from time import sleep
 from urllib.parse import urlparse
@@ -15,9 +16,12 @@ from slacker import *
 
 # Obtains all replies for a given channel id + a starting timestamp
 # Duplicates the logic in getHistory
+
+
 def getReplies(channelId, timestamp, pageSize=1000):
     conversationObject = slack.conversations
     messages = []
+    response = {}
     lastTimestamp = None
     lastTimestampFromPreviousIteration = lastTimestamp
 
@@ -33,7 +37,8 @@ def getReplies(channelId, timestamp, pageSize=1000):
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
                 retryInSeconds = int(e.response.headers["Retry-After"])
-                print("Rate limit hit. Retrying in {0} second{1}.".format(retryInSeconds, "s" if retryInSeconds > 1 else ""))
+                print("Rate limit hit. Retrying in {0} second{1}.".format(
+                    retryInSeconds, "s" if retryInSeconds > 1 else ""))
                 sleep(retryInSeconds + 1)
 
                 response = conversationObject.replies(
@@ -51,7 +56,8 @@ def getReplies(channelId, timestamp, pageSize=1000):
             sys.stdout.flush()
             sleep(1.3)  # Respect the Slack API rate limit
 
-            lastTimestamp = messages[-1]['ts']  # -1 means last element in a list
+            # -1 means last element in a list
+            lastTimestamp = messages[-1]['ts']
             minTimestamp = None
 
             if lastTimestamp == lastTimestampFromPreviousIteration:
@@ -87,8 +93,6 @@ def getReplies(channelId, timestamp, pageSize=1000):
     return messages
 
 
-
-
 # fetches the complete message history for a channel/group/im
 #
 # pageableObject could be:
@@ -98,31 +102,33 @@ def getReplies(channelId, timestamp, pageSize=1000):
 #
 # channelId is the id of the channel/group/im you want to download history for.
 
-def getHistory(pageableObject, channelId, pageSize = 1000):
+def getHistory(pageableObject, channelId, pageSize=1000):
     messages = []
+    response = {}
     lastTimestamp = None
     lastTimestampFromPreviousIteration = lastTimestamp
 
-    while(True):
+    while (True):
         try:
-             if isinstance(pageableObject, Conversations):
+            if isinstance(pageableObject, Conversations):
                 response = pageableObject.history(
                     channel=channelId,
                     latest=lastTimestamp,
                     oldest=0,
                     limit=pageSize
                 ).body
-             else:
+            else:
                 response = pageableObject.history(
-                    channel = channelId,
-                    latest    = lastTimestamp,
-                    oldest    = 0,
-                    count     = pageSize
+                    channel=channelId,
+                    latest=lastTimestamp,
+                    oldest=0,
+                    count=pageSize
                 ).body
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 429:
                 retryInSeconds = int(e.response.headers['Retry-After'])
-                print("Rate limit hit. Retrying in {0} second{1}.".format(retryInSeconds, "s" if retryInSeconds > 1 else ""))
+                print("Rate limit hit. Retrying in {0} second{1}.".format(
+                    retryInSeconds, "s" if retryInSeconds > 1 else ""))
                 sleep(retryInSeconds + 1)
                 if isinstance(pageableObject, Conversations):
                     response = pageableObject.history(
@@ -144,15 +150,17 @@ def getHistory(pageableObject, channelId, pageSize = 1000):
         # Grab all replies
         for message in response["messages"]:
             if "thread_ts" in message:
-                sleep(0.5) #INSERT LIMIT
-                messages.extend(getReplies(channelId, message["thread_ts"], pageSize))
+                sleep(0.5)  # INSERT LIMIT
+                messages.extend(getReplies(
+                    channelId, message["thread_ts"], pageSize))
 
         if (response['has_more'] == True):
             sys.stdout.write("*")
             sys.stdout.flush()
-            sleep(1.3) # Respect the Slack API rate limit
+            sleep(1.3)  # Respect the Slack API rate limit
 
-            lastTimestamp = messages[-1]['ts'] # -1 means last element in a list
+            # -1 means last element in a list
+            lastTimestamp = messages[-1]['ts']
             minTimestamp = None
 
             if lastTimestamp == lastTimestampFromPreviousIteration:
@@ -177,7 +185,7 @@ def getHistory(pageableObject, channelId, pageSize = 1000):
     if lastTimestamp != None:
         print("")
 
-    messages.sort(key = lambda message: message['ts'])
+    messages.sort(key=lambda message: message['ts'])
 
     return messages
 
@@ -188,79 +196,86 @@ def mkdir(directory):
 
 
 # create datetime object from slack timestamp ('ts') string
-def parseTimeStamp( timeStamp ):
+def parseTimeStamp(timeStamp):
     if '.' in timeStamp:
         t_list = timeStamp.split('.')
-        if len( t_list ) != 2:
-            raise ValueError( 'Invalid time stamp' )
+        if len(t_list) != 2:
+            raise ValueError('Invalid time stamp')
         else:
-            return datetime.utcfromtimestamp( float(t_list[0]) )
+            return datetime.utcfromtimestamp(float(t_list[0]))
 
 
 # move channel files from old directory to one with new channel name
-def channelRename( oldRoomName, newRoomName ):
+def channelRename(oldRoomName, newRoomName):
     # check if any files need to be moved
-    if not os.path.isdir( oldRoomName ):
+    if not os.path.isdir(oldRoomName):
         return
-    mkdir( newRoomName )
-    for fileName in os.listdir( oldRoomName ):
-        shutil.move( os.path.join( oldRoomName, fileName ), newRoomName )
-    os.rmdir( oldRoomName )
+    mkdir(newRoomName)
+    for fileName in os.listdir(oldRoomName):
+        shutil.move(os.path.join(oldRoomName, fileName), newRoomName)
+    os.rmdir(oldRoomName)
 
 
-def writeMessageFile( fileName, messages ):
+def writeMessageFile(fileName, messages):
     directory = os.path.dirname(fileName)
 
     # if there's no data to write to the file, return
     if not messages:
         return
 
-    if not os.path.isdir( directory ):
-        mkdir( directory )
+    if not os.path.isdir(directory):
+        mkdir(directory)
 
     with open(fileName, 'w') as outFile:
-        json.dump( messages, outFile, indent=4)
+        json.dump(messages, outFile, indent=4)
 
 
 # parse messages by date
-def parseMessages( roomDir, messages, roomType ):
+def parseMessages(roomDir, messages, roomType):
     nameChangeFlag = roomType + "_name"
 
     currentFileDate = ''
     currentMessages = []
     for message in messages:
-        #first store the date of the next message
-        ts = parseTimeStamp( message['ts'] )
+        # first store the date of the next message
+        ts = parseTimeStamp(message['ts'])
         fileDate = '{:%Y-%m-%d}'.format(ts)
 
-        #if it's on a different day, write out the previous day's messages
+        # if it's on a different day, write out the previous day's messages
         if fileDate != currentFileDate:
-            outFileName = '{room}/{file}.json'.format( room = roomDir, file = currentFileDate )
-            writeMessageFile( outFileName, currentMessages )
+            outFileName = '{room}/{file}.json'.format(
+                room=roomDir, file=currentFileDate)
+            writeMessageFile(outFileName, currentMessages)
             currentFileDate = fileDate
             currentMessages = []
 
         # check if current message is a name change
         # dms won't have name change events
-        if roomType != "im" and ( 'subtype' in message ) and message['subtype'] == nameChangeFlag:
+        if roomType != "im" and ('subtype' in message) and message['subtype'] == nameChangeFlag:
             roomDir = message['name']
             oldRoomPath = message['old_name']
             newRoomPath = roomDir
-            channelRename( oldRoomPath, newRoomPath )
+            channelRename(oldRoomPath, newRoomPath)
 
-        currentMessages.append( message )
-    outFileName = '{room}/{file}.json'.format( room = roomDir, file = currentFileDate )
-    writeMessageFile( outFileName, currentMessages )
+        currentMessages.append(message)
+    outFileName = '{room}/{file}.json'.format(
+        room=roomDir, file=currentFileDate)
+    writeMessageFile(outFileName, currentMessages)
+
 
 def filterConversationsByName(channelsOrGroups, channelOrGroupNames):
     return [conversation for conversation in channelsOrGroups if conversation['name'] in channelOrGroupNames]
 
+
 def promptForPublicChannels(channels):
     channelNames = [channel['name'] for channel in channels]
-    selectedChannels = pick(channelNames, 'Select the Public Channels you want to export:', multiselect=True)
+    selectedChannels: List[str] = pick(
+        channelNames, 'Select the Public Channels you want to export:', multiselect=True)  # type: ignore
     return [channels[index] for channelName, index in selectedChannels]
 
 # fetch and write history for all public channels
+
+
 def fetchPublicChannels(channels):
     print("Fetching", len(channels), "public channels")
     if dryRun:
@@ -274,17 +289,19 @@ def fetchPublicChannels(channels):
         channelDir = channel['name']
         print("Fetching history for Public Channel: {0}".format(channelDir))
         try:
-            mkdir( channelDir )
+            mkdir(channelDir)
         except NotADirectoryError:
             # Failed creating directory, probably because the name is not a valid
             # Windows directory name (like "com4"). Adding a prefix to try to work-around
             # that.
             channelDir = ("c-" + channel['name'])
-            mkdir( channelDir )
+            mkdir(channelDir)
         messages = getHistory(slack.conversations, channel['id'])
-        parseMessages( channelDir, messages, 'channel')
+        parseMessages(channelDir, messages, 'channel')
 
 # write channels.json file
+
+
 def dumpChannelFile():
     print("Making channels file")
 
@@ -301,33 +318,41 @@ def dumpChannelFile():
     for dm in dms:
         dm['members'] = [dm['user'], tokenOwnerId]
 
-    #We will be overwriting this file on each run.
+    # We will be overwriting this file on each run.
     with open('channels.json', 'w') as outFile:
-        json.dump( channels , outFile, indent=4)
+        json.dump(channels, outFile, indent=4)
     with open('groups.json', 'w') as outFile:
-        json.dump( private , outFile, indent=4)
+        json.dump(private, outFile, indent=4)
     with open('mpims.json', 'w') as outFile:
-        json.dump( mpim , outFile, indent=4)
+        json.dump(mpim, outFile, indent=4)
     with open('dms.json', 'w') as outFile:
-        json.dump( dms , outFile, indent=4)
+        json.dump(dms, outFile, indent=4)
+
 
 def filterDirectMessagesByUserNameOrId(dms, userNamesOrIds):
-    userIds = [userIdsByName.get(userNameOrId, userNameOrId) for userNameOrId in userNamesOrIds]
+    userIds = [userIdsByName.get(userNameOrId, userNameOrId)
+               for userNameOrId in userNamesOrIds]
     return [dm for dm in dms if dm['user'] in userIds]
 
+
 def promptForDirectMessages(dms):
-    dmNames = [userNamesById.get(dm['user'], dm['user'] + " (name unknown)") for dm in dms]
-    selectedDms = pick(dmNames, 'Select the 1:1 DMs you want to export:', multiselect=True)
+    dmNames = [userNamesById.get(
+        dm['user'], dm['user'] + " (name unknown)") for dm in dms]
+    selectedDms: List[str] = pick(
+        dmNames, 'Select the 1:1 DMs you want to export:', multiselect=True)  # type: ignore
     return [dms[index] for dmName, index in selectedDms]
 
 # fetch and write history for all direct message conversations
 # also known as IMs in the slack API.
+
+
 def fetchDirectMessages(dms):
     print("Fetching", len(dms), "1:1 DMs")
     if dryRun:
         print("1:1 DMs selected for export:")
         for dm in dms:
-            print(userNamesById.get(dm['user'], dm['user'] + " (name unknown)"))
+            print(userNamesById.get(dm['user'],
+                  dm['user'] + " (name unknown)"))
         print()
         return
 
@@ -337,15 +362,19 @@ def fetchDirectMessages(dms):
         dmId = dm['id']
         mkdir(dmId)
         messages = getHistory(slack.conversations, dm['id'])
-        parseMessages( dmId, messages, "im" )
+        parseMessages(dmId, messages, "im")
+
 
 def promptForGroups(groups):
     groupNames = [group['name'] for group in groups]
-    selectedGroups = pick(groupNames, 'Select the Private Channels and Group DMs you want to export:', multiselect=True)
+    selectedGroups: List[str] = pick(
+        groupNames, 'Select the Private Channels and Group DMs you want to export:', multiselect=True)  # type: ignore
     return [groups[index] for groupName, index in selectedGroups]
 
 # fetch and write history for specific private channel
 # also known as groups in the slack API.
+
+
 def fetchGroups(groups):
     print("Fetching", len(groups), "Private Channels and Group DMs")
     if dryRun:
@@ -359,11 +388,14 @@ def fetchGroups(groups):
         groupDir = group['name']
         mkdir(groupDir)
         messages = []
-        print("Fetching history for Private Channel / Group DM: {0}".format(group['name']))
+        print(
+            "Fetching history for Private Channel / Group DM: {0}".format(group['name']))
         messages = getHistory(slack.conversations, group['id'])
-        parseMessages( groupDir, messages, 'group' )
+        parseMessages(groupDir, messages, 'group')
 
 # fetch all users for the channel and return a map userId -> userName
+
+
 def getUserMap():
     global userNamesById, userIdsByName
     for user in users:
@@ -371,17 +403,22 @@ def getUserMap():
         userIdsByName[user['name']] = user['id']
 
 # stores json of user info
+
+
 def dumpUserFile():
-    #write to user file, any existing file needs to be overwritten.
-    with open( "users.json", 'w') as userFile:
-        json.dump( users, userFile, indent=4 )
+    # write to user file, any existing file needs to be overwritten.
+    with open("users.json", 'w') as userFile:
+        json.dump(users, userFile, indent=4)
 
 # get basic info about the slack channel to ensure the authentication token works
+
+
 def doTestAuth():
     testAuth = slack.auth.test().body
     teamName = testAuth['team']
     currentUser = testAuth['user']
-    print("Successfully authenticated for team {0} and user {1} ".format(teamName, currentUser))
+    print("Successfully authenticated for team {0} and user {1} ".format(
+        teamName, currentUser))
     return testAuth
 
 # Since Slacker does not Cache.. populate some reused lists
@@ -401,6 +438,8 @@ def doTestAuth():
 #        +
 #        + print("Found {0} Users".format(len(users)))
 #
+
+
 def bootstrapKeyValues():
     global users, channels, groups, dms
     page_size = 200
@@ -414,10 +453,12 @@ def bootstrapKeyValues():
     while next_cursor != "":
         response = None
         if next_cursor is None:
-            response = slack.conversations.list(limit=page_size, types=('public_channel'))
+            response = slack.conversations.list(
+                limit=page_size, types=('public_channel'))
         else:
             print("Using cursor: {}".format(next_cursor))
-            response = slack.conversations.list(limit=page_size, cursor=next_cursor, types=('public_channel'))
+            response = slack.conversations.list(
+                limit=page_size, cursor=next_cursor, types=('public_channel'))
         returned_channels = response.body['channels']
         next_cursor = response.body['response_metadata']['next_cursor']
         print("Page {}".format(page))
@@ -425,32 +466,39 @@ def bootstrapKeyValues():
         print("Next_cursor: {}".format(next_cursor))
         # think maybe need to retrieve channel memberships for the slack-export-viewer to work
         for n in range(0, len(returned_channels)):
-            returned_channels[n]["members"] = slack.conversations.members(limit=1000, channel=returned_channels[n]['id']).body['members']
-            print("Retrieved members of {0}".format(returned_channels[n]['name']))
+            returned_channels[n]["members"] = slack.conversations.members(
+                limit=1000, channel=returned_channels[n]['id']).body['members']
+            print("Retrieved members of {0}".format(
+                returned_channels[n]['name']))
         channels.extend(returned_channels)
         sleep(3.05)
         page += 1
     print("Total number of channels: {}".format(len(channels)))
 
-    groups = slack.conversations.list(limit = 1000, types=('private_channel', 'mpim')).body['channels']
+    groups = slack.conversations.list(limit=1000, types=(
+        'private_channel', 'mpim')).body['channels']
     print("Found {0} Private Channels or Group DMs".format(len(groups)))
     # need to retrieve channel memberships for the slack-export-viewer to work
     for n in range(len(groups)):
-        groups[n]["members"] = slack.conversations.members(limit=1000, channel=groups[n]['id']).body['members']
+        groups[n]["members"] = slack.conversations.members(
+            limit=1000, channel=groups[n]['id']).body['members']
         print("Retrieved members of {0}".format(groups[n]['name']))
     sleep(3.05)
 
-    dms = slack.conversations.list(limit = 1000, types=('im')).body['channels']
+    dms = slack.conversations.list(limit=1000, types=('im')).body['channels']
     print("Found {0} 1:1 DM conversations\n".format(len(dms)))
     sleep(3.05)
 
     getUserMap()
 
 # Returns the conversations to download based on the command-line arguments
+
+
 def selectConversations(allConversations, commandLineArg, filter, prompt):
     global args
     if args.excludeArchived:
-        allConversations = [ conv for conv in allConversations if not conv["is_archived"] ]
+        allConversations = [
+            conv for conv in allConversations if not conv["is_archived"]]
     if isinstance(commandLineArg, list) and len(commandLineArg) > 0:
         return filter(allConversations, commandLineArg)
     elif commandLineArg != None or not anyConversationsSpecified():
@@ -462,20 +510,25 @@ def selectConversations(allConversations, commandLineArg, filter, prompt):
         return []
 
 # Returns true if any conversations were specified on the command line
+
+
 def anyConversationsSpecified():
     global args
     return args.publicChannels != None or args.groups != None or args.directMessages != None
 
 # This method is used in order to create a empty Channel if you do not export public channels
 # otherwise, the viewer will error and not show the root screen. Rather than forking the editor, I work with it.
+
+
 def dumpDummyChannel():
     channelName = channels[0]['name']
-    mkdir( channelName )
+    mkdir(channelName)
     fileDate = '{:%Y-%m-%d}'.format(datetime.today())
-    outFileName = '{room}/{file}.json'.format( room = channelName, file = fileDate )
+    outFileName = '{room}/{file}.json'.format(room=channelName, file=fileDate)
     writeMessageFile(outFileName, [])
 
-def downloadFiles(token, cookie_header=None):
+
+def downloadFiles(token, cookie_header={}):
     """
     Iterate through all json files, downloads files stored on files.slack.com and replaces the link with a local one
 
@@ -504,13 +557,17 @@ def downloadFiles(token, cookie_header=None):
 
                             url = urlparse(value)
 
-                            localFile = os.path.join("../files.slack.com", url.path[1:])  # Need to discard first "/" in URL, because:
-                                # "If a component is an absolute path, all previous components are thrown away and joining continues
-                                # from the absolute path component."
-                            print("Downloading %s, saving to %s" % (url.geturl(), localFile))
+                            # Need to discard first "/" in URL, because:
+                            localFile = os.path.join(
+                                "../files.slack.com", url.path[1:])
+                            # "If a component is an absolute path, all previous components are thrown away and joining continues
+                            # from the absolute path component."
+                            print("Downloading %s, saving to %s" %
+                                  (url.geturl(), localFile))
 
                             # Create folder structure
-                            os.makedirs(os.path.dirname(localFile), exist_ok=True)
+                            os.makedirs(os.path.dirname(
+                                localFile), exist_ok=True)
 
                             # Replace URL in data - suitable for use with slack-export-viewer if files.slack.com is linked
                             slackFile[key] = "/static/files.slack.com%s" % url.path
@@ -518,12 +575,13 @@ def downloadFiles(token, cookie_header=None):
                             # Check if file already downloaded, with a non-zero size
                             # (can't check for same size because thumbnails don't have a size)
                             if os.path.exists(localFile) and (os.path.getsize(localFile) > 0):
-                                print("Skipping already downloaded file: %s" % localFile)
+                                print(
+                                    "Skipping already downloaded file: %s" % localFile)
                                 continue
 
                             # Download files
                             headers = {"Authorization": f"Bearer {token}",
-                            **cookie_header}
+                                       **cookie_header}
                             r = requests.get(url.geturl(), headers=headers)
                             try:
                                 open(localFile, 'wb').write(r.content)
@@ -531,12 +589,12 @@ def downloadFiles(token, cookie_header=None):
                                 print("File writing error-still all broken")
                                 continue
 
-
             # Save updated data to json file
             with open(filePath, "w") as outFile:
                 json.dump(data, outFile, indent=4, sort_keys=True)
 
             print("Replaced all files in %s" % filePath)
+
 
 def finalize():
     os.chdir('..')
@@ -545,11 +603,13 @@ def finalize():
         shutil.rmtree(outputDirectory)
     exit()
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Export Slack history')
 
     parser.add_argument('--token', required=True, help="Slack API token")
-    parser.add_argument('--cookie', help="a set of cookies for the xoxc api token")
+    parser.add_argument(
+        '--cookie', help="a set of cookies for the xoxc api token")
     parser.add_argument('--zip', help="Name of a zip file to output as")
 
     parser.add_argument(
@@ -590,7 +650,7 @@ if __name__ == "__main__":
         action='store_true',
         default=False,
         help="Downloads files from files.slack.com for local access, stored in 'files.slack.com' folder. "
-            "Link this folder inside slack-export-viewer/slackviewer/static/ to have it work seamless with slack-export-viewer")
+        "Link this folder inside slack-export-viewer/slackviewer/static/ to have it work seamless with slack-export-viewer")
 
     parser.add_argument(
         '--excludeArchived',
@@ -623,7 +683,8 @@ if __name__ == "__main__":
     dryRun = args.dryRun
     zipName = args.zip
 
-    outputDirectory = "{0}-slack_export".format(datetime.today().strftime("%Y%m%d-%H%M%S"))
+    outputDirectory = "{0}-slack_export".format(
+        datetime.today().strftime("%Y%m%d-%H%M%S"))
     mkdir(outputDirectory)
     os.chdir(outputDirectory)
 
@@ -637,7 +698,8 @@ if __name__ == "__main__":
         filterConversationsByName,
         promptForPublicChannels)
     if args.excludeNonMember:
-        selectedChannels  = [ channel for channel in selectedChannels if channel["is_member"] ]
+        selectedChannels = [
+            channel for channel in selectedChannels if channel["is_member"]]
 
     selectedGroups = selectConversations(
         groups,
