@@ -29,10 +29,11 @@ def paginatedRequest(
   pageSize: int = 200
 ) -> List[MutableMapping[str, Any]]:
     items = []
-    response = None
     cursor = None
 
     while (cursor != ""):
+        response = None
+
         while (response is None):
             try:
                 response = getResponse(cursor, pageSize)
@@ -357,6 +358,7 @@ def getAllChannels(types, exclude_archived=False, get_members=True):
         ).body
     def processItemPage(items: List[MutableMapping[str, Any]]) -> None:
         if (get_members):
+            print("Getting members of {} channels".format(len(items)))
             # think maybe need to retrieve channel memberships for the slack-export-viewer to work
             for channel in items:
                 channel["members"] = getChannelMembers(channel)
@@ -376,18 +378,21 @@ def bootstrapKeyValues(args):
     if (args.publicChannels is None):
       print("Not fetching public channels")
     else:
+      print("Fetching public channels")
       channels = getAllChannels(types=('public_channel'), exclude_archived=args.excludeArchived)
       print("Found {0} Public Channels".format(len(channels)))
 
     if (args.groups is None):
       print("Not fetching private channels or group DMs")
     else:
+      print("Fetching private channels or group DMs")
       groups = getAllChannels(types=('private_channel', 'mpim'), exclude_archived=args.excludeArchived)
       print("Found {0} Private Channels or Group DMs".format(len(groups)))
 
     if (args.directMessages is None):
       print("Not fetching DMs")
     else:
+      print("Fetching DMs")
       dms = getAllChannels(types=('im'), exclude_archived=args.excludeArchived, get_members=False)
       print("Found {0} 1:1 DM conversations\n".format(len(dms)))
 
