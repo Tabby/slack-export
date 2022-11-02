@@ -1,1 +1,3 @@
-* Paginate downloading of channel history
+# TODO
+
+* Create generic paginated fetch method

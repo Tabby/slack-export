@@ -14,85 +14,6 @@ from slacker import *
 
 ##################################################################
 
-# Obtains all replies for a given channel id + a starting timestamp
-# Duplicates the logic in getHistory
-
-
-def getReplies(channelId, timestamp, pageSize=1000):
-    conversationObject = slack.conversations
-    messages = []
-    response = {}
-    lastTimestamp = None
-    lastTimestampFromPreviousIteration = lastTimestamp
-
-    while True:
-        try:
-            response = conversationObject.replies(
-                channel=channelId,
-                ts=timestamp,
-                latest=lastTimestamp,
-                oldest=0,
-                limit=pageSize,
-            ).body
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429:
-                retryInSeconds = int(e.response.headers["Retry-After"])
-                print("Rate limit hit. Retrying in {0} second{1}.".format(
-                    retryInSeconds, "s" if retryInSeconds > 1 else ""))
-                sleep(retryInSeconds + 1)
-
-                response = conversationObject.replies(
-                    channel=channelId,
-                    ts=timestamp,
-                    latest=lastTimestamp,
-                    oldest=0,
-                    limit=pageSize,
-                ).body
-
-        messages.extend(response["messages"])
-
-        if response["has_more"] == True:
-            sys.stdout.write(".")
-            sys.stdout.flush()
-            sleep(1.3)  # Respect the Slack API rate limit
-
-            # -1 means last element in a list
-            lastTimestamp = messages[-1]['ts']
-            minTimestamp = None
-
-            if lastTimestamp == lastTimestampFromPreviousIteration:
-                # Then we might be in an infinite loop,
-                # because lastTimestamp is supposed to be decreasing.
-                # Try harder: maybe we want messages[-2]['ts']?
-
-                minTimestamp = float(lastTimestamp)
-                for m in messages:
-                    if minTimestamp > float(m['ts']):
-                        minTimestamp = float(m['ts'])
-
-                if minTimestamp == lastTimestamp:
-                    print("warning: lastTimestamp is not changing.  infinite loop?")
-                lastTimestamp = minTimestamp
-
-            lastTimestampFromPreviousIteration = lastTimestamp
-
-        else:
-            break
-
-    if lastTimestamp != None:
-        print("")
-
-    messages.sort(key=lambda message: message["ts"])
-
-    # Obtaining replies also gives us the first message in the the thread
-    # (which we don't want) -- after sorting, our first message with the be the
-    # first in the list of all messages, so we remove the head of the list
-    assert messages[0]["ts"] == timestamp, "unexpected start of thread"
-    messages = messages[1:]
-
-    return messages
-
-
 # fetches the complete message history for a channel/group/im
 #
 # pageableObject could be:
@@ -102,90 +23,58 @@ def getReplies(channelId, timestamp, pageSize=1000):
 #
 # channelId is the id of the channel/group/im you want to download history for.
 
-def getHistory(pageableObject, channelId, pageSize=1000):
+def getHistory(channelId, thread_ts=None, pageSize=200):
     messages = []
-    response = {}
-    lastTimestamp = None
-    lastTimestampFromPreviousIteration = lastTimestamp
+    response = None
+    cursor = None
 
-    while (True):
-        try:
-            if isinstance(pageableObject, Conversations):
-                response = pageableObject.history(
-                    channel=channelId,
-                    latest=lastTimestamp,
-                    oldest=0,
-                    limit=pageSize
-                ).body
-            else:
-                response = pageableObject.history(
-                    channel=channelId,
-                    latest=lastTimestamp,
-                    oldest=0,
-                    count=pageSize
-                ).body
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 429:
-                retryInSeconds = int(e.response.headers['Retry-After'])
-                print("Rate limit hit. Retrying in {0} second{1}.".format(
-                    retryInSeconds, "s" if retryInSeconds > 1 else ""))
-                sleep(retryInSeconds + 1)
-                if isinstance(pageableObject, Conversations):
-                    response = pageableObject.history(
+    while (cursor != ""):
+        while (response is None):
+            try:
+                if (thread_ts is None):
+                    response = slack.conversations.history(
                         channel=channelId,
-                        latest=lastTimestamp,
-                        oldest=0,
+                        cursor=cursor,
                         limit=pageSize
                     ).body
                 else:
-                    response = pageableObject.history(
+                    response = slack.conversations.replies(
                         channel=channelId,
-                        latest=lastTimestamp,
-                        oldest=0,
-                        count=pageSize
+                        ts=thread_ts,
+                        cursor=cursor,
+                        limit=pageSize,
                     ).body
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 429:
+                    retryInSeconds = int(e.response.headers['Retry-After'])
+                    print("Rate limit hit. Retrying in {0} second{1}.".format(
+                        retryInSeconds, "s" if retryInSeconds > 1 else ""))
+                    sleep(retryInSeconds + 1)
+                else:
+                    raise
 
         messages.extend(response['messages'])
+        cursor = response['response_metadata']['next_cursor']
 
-        # Grab all replies
-        for message in response["messages"]:
-            if "thread_ts" in message:
-                sleep(0.5)  # INSERT LIMIT
-                messages.extend(getReplies(
-                    channelId, message["thread_ts"], pageSize))
+        if (thread_ts is None):
+            # Grab all replies
+            for message in response["messages"]:
+                if "thread_ts" in message:
+                    sleep(0.5)  # INSERT LIMIT
+                    messages.extend(getHistory(channelId, message["thread_ts"], pageSize))
 
-        if (response['has_more'] == True):
-            sys.stdout.write("*")
-            sys.stdout.flush()
-            sleep(1.3)  # Respect the Slack API rate limit
-
-            # -1 means last element in a list
-            lastTimestamp = messages[-1]['ts']
-            minTimestamp = None
-
-            if lastTimestamp == lastTimestampFromPreviousIteration:
-                # Then we might be in an infinite loop,
-                # because lastTimestamp is supposed to be decreasing.
-                # Try harder: maybe we want messages[-2]['ts']?
-
-                minTimestamp = float(lastTimestamp)
-                for m in messages:
-                    if minTimestamp > float(m['ts']):
-                        minTimestamp = float(m['ts'])
-
-                if minTimestamp == lastTimestamp:
-                    print("warning: lastTimestamp is not changing.  infinite loop?")
-                lastTimestamp = minTimestamp
-
-            lastTimestampFromPreviousIteration = lastTimestamp
-
-        else:
-            break
-
-    if lastTimestamp != None:
-        print("")
+        sys.stdout.write(".")
+        sys.stdout.flush()
+        sleep(1.3)  # Respect the Slack API rate limit
 
     messages.sort(key=lambda message: message['ts'])
+
+    if (thread_ts is not None):
+        # Obtaining replies also gives us the first message in the the thread
+        # (which we don't want) -- after sorting, our first message with the be the
+        # first in the list of all messages, so we remove the head of the list
+        assert messages[0]["ts"] == thread_ts, "unexpected start of thread"
+        messages = messages[1:]
 
     return messages
 
@@ -296,7 +185,7 @@ def fetchPublicChannels(channels):
             # that.
             channelDir = ("c-" + channel['name'])
             mkdir(channelDir)
-        messages = getHistory(slack.conversations, channel['id'])
+        messages = getHistory(channel['id'])
         parseMessages(channelDir, messages, 'channel')
 
 # write channels.json file
@@ -361,7 +250,7 @@ def fetchDirectMessages(dms):
         print("Fetching 1:1 DMs with {0}".format(name))
         dmId = dm['id']
         mkdir(dmId)
-        messages = getHistory(slack.conversations, dm['id'])
+        messages = getHistory(dm['id'])
         parseMessages(dmId, messages, "im")
 
 
@@ -390,7 +279,7 @@ def fetchGroups(groups):
         messages = []
         print(
             "Fetching history for Private Channel / Group DM: {0}".format(group['name']))
-        messages = getHistory(slack.conversations, group['id'])
+        messages = getHistory(group['id'])
         parseMessages(groupDir, messages, 'group')
 
 # fetch all users for the channel and return a map userId -> userName
