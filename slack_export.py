@@ -431,15 +431,20 @@ def getChannelMembers(channel):
         next_cursor = response.body['response_metadata']['next_cursor']
     return members
 
-def getAllChannels(types, getMembers=True):
+def getAllChannels(types, exclude_archived=False, get_members=True):
     page_size = 200
     next_cursor = None
     channels = []
     while next_cursor != "":
-        response = slack.conversations.list(limit=page_size, cursor=next_cursor, types=types)
+        response = slack.conversations.list(
+          limit=page_size,
+          cursor=next_cursor,
+          types=types,
+          exclude_archived=exclude_archived
+        )
         returned_channels = response.body['channels']
         next_cursor = response.body['response_metadata']['next_cursor']
-        if (getMembers):
+        if (get_members):
             # think maybe need to retrieve channel memberships for the slack-export-viewer to work
             for n in range(0, len(returned_channels)):
                 returned_channels[n]["members"] = getChannelMembers(returned_channels[n])
@@ -449,23 +454,30 @@ def getAllChannels(types, getMembers=True):
     return channels
 
 # Since Slacker does not Cache.. populate some reused lists
-# TODO:
-#   1. Only populate data for lists that will be used in export.
-def bootstrapKeyValues():
+def bootstrapKeyValues(args):
     global users, channels, groups, dms
 
     users = slack.users.list().body['members']
     print("Found {0} Users".format(len(users)))
     sleep(3.05)
 
-    channels = getAllChannels(types=('public_channel'))
-    print("Found {0} Public Channels".format(len(channels)))
+    if (args.publicChannels is None):
+      print("Not fetching public channels")
+    else:
+      channels = getAllChannels(types=('public_channel'), exclude_archived=args.excludeArchived)
+      print("Found {0} Public Channels".format(len(channels)))
 
-    groups = getAllChannels(types=('private_channel', 'mpim'))
-    print("Found {0} Private Channels or Group DMs".format(len(groups)))
+    if (args.groups is None):
+      print("Not fetching private channels or group DMs")
+    else:
+      groups = getAllChannels(types=('private_channel', 'mpim'), exclude_archived=args.excludeArchived)
+      print("Found {0} Private Channels or Group DMs".format(len(groups)))
 
-    dms = getAllChannels(types=('im'), getMembers=False)
-    print("Found {0} 1:1 DM conversations\n".format(len(dms)))
+    if (args.directMessages is None):
+      print("Not fetching DMs")
+    else:
+      dms = getAllChannels(types=('im'), exclude_archived=args.excludeArchived, get_members=False)
+      print("Found {0} 1:1 DM conversations\n".format(len(dms)))
 
     getUserMap()
 
@@ -656,7 +668,7 @@ if __name__ == "__main__":
     testAuth = doTestAuth()
     tokenOwnerId = testAuth['user_id']
 
-    bootstrapKeyValues()
+    bootstrapKeyValues(args)
 
     dryRun = args.dryRun
     zipName = args.zip
