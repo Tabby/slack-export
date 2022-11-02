@@ -4,7 +4,7 @@ import os
 import shutil
 import sys
 from datetime import datetime
-from typing import List
+from typing import Any, Callable, List, Mapping, MutableMapping, Optional
 from pick import pick
 from time import sleep
 from urllib.parse import urlparse
@@ -13,6 +13,48 @@ import requests
 from slacker import *
 
 ##################################################################
+
+noop = lambda *args, **kwargs: None
+
+def getCursor(response: Mapping) -> Optional[str]:
+    metadata = response.get('response_metadata')
+    if metadata:
+        return metadata.get('next_cursor')
+    return None
+
+def paginatedRequest(
+  getResponse: Callable[[Optional[str], int], MutableMapping[str, Any]],
+  itemsKey: str,
+  processItemPage: Callable[[List[MutableMapping[str, Any]]], None] = noop,
+  pageSize: int = 200
+) -> List[MutableMapping[str, Any]]:
+    items = []
+    response = None
+    cursor = None
+
+    while (cursor != ""):
+        while (response is None):
+            try:
+                response = getResponse(cursor, pageSize)
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 429:
+                    retryInSeconds = int(e.response.headers['Retry-After'])
+                    print("Rate limit hit. Retrying in {0} second{1}.".format(
+                        retryInSeconds, "s" if retryInSeconds > 1 else ""))
+                    sleep(retryInSeconds + 1)
+                else:
+                    raise
+
+        returned_items = response[itemsKey]
+        items.extend(returned_items)
+        cursor = getCursor(response)
+
+        processItemPage(returned_items)
+
+        if cursor is None: # No pagination as fewer than pageSize items
+            break
+
+    return items
 
 # fetches the complete message history for a channel/group/im
 #
@@ -24,48 +66,34 @@ from slacker import *
 # channelId is the id of the channel/group/im you want to download history for.
 
 def getHistory(channelId, thread_ts=None, pageSize=200):
-    messages = []
-    response = None
-    cursor = None
+    def getResponse(cursor: Optional[str], pageSize: int) -> MutableMapping:
+        if (thread_ts is None):
+            return slack.conversations.history(
+                channel=channelId,
+                cursor=cursor,
+                limit=pageSize
+            ).body
+        else:
+            return slack.conversations.replies(
+                channel=channelId,
+                ts=thread_ts,
+                cursor=cursor,
+                limit=pageSize,
+            ).body
 
-    while (cursor != ""):
-        while (response is None):
-            try:
-                if (thread_ts is None):
-                    response = slack.conversations.history(
-                        channel=channelId,
-                        cursor=cursor,
-                        limit=pageSize
-                    ).body
-                else:
-                    response = slack.conversations.replies(
-                        channel=channelId,
-                        ts=thread_ts,
-                        cursor=cursor,
-                        limit=pageSize,
-                    ).body
-            except requests.exceptions.HTTPError as e:
-                if e.response.status_code == 429:
-                    retryInSeconds = int(e.response.headers['Retry-After'])
-                    print("Rate limit hit. Retrying in {0} second{1}.".format(
-                        retryInSeconds, "s" if retryInSeconds > 1 else ""))
-                    sleep(retryInSeconds + 1)
-                else:
-                    raise
-
-        messages.extend(response['messages'])
-        cursor = response['response_metadata']['next_cursor']
-
+    def processItemPage(items: List[MutableMapping]) -> None:
         if (thread_ts is None):
             # Grab all replies
-            for message in response["messages"]:
+            for message in items:
                 if "thread_ts" in message:
-                    sleep(0.5)  # INSERT LIMIT
-                    messages.extend(getHistory(channelId, message["thread_ts"], pageSize))
+                    # sleep(0.5)  # INSERT LIMIT
+                    items.extend(getHistory(channelId, message["thread_ts"], pageSize))
 
         sys.stdout.write(".")
         sys.stdout.flush()
-        sleep(1.3)  # Respect the Slack API rate limit
+        # sleep(1.3)  # Respect the Slack API rate limit
+
+    messages = paginatedRequest(getResponse, 'messages', processItemPage)
 
     messages.sort(key=lambda message: message['ts'])
 
@@ -311,36 +339,31 @@ def doTestAuth():
     return testAuth
 
 def getChannelMembers(channel):
-    page_size = 200
-    next_cursor = None
-    members = []
-    while next_cursor != "":
-        response = slack.conversations.members(limit=page_size, cursor=next_cursor, channel=channel['id'])
-        members.extend(response.body['members'])
-        next_cursor = response.body['response_metadata']['next_cursor']
-    return members
+    def getResponse(cursor: Optional[str], pageSize: int) -> MutableMapping[str, Any]:
+        return slack.conversations.members(
+            limit=pageSize,
+            cursor=cursor,
+            channel=channel['id']
+        ).body
+    return paginatedRequest(getResponse, 'members')
 
 def getAllChannels(types, exclude_archived=False, get_members=True):
-    page_size = 200
-    next_cursor = None
-    channels = []
-    while next_cursor != "":
-        response = slack.conversations.list(
-          limit=page_size,
-          cursor=next_cursor,
+    def getResponse(cursor: Optional[str], pageSize: int) -> MutableMapping[str, Any]:
+        return slack.conversations.list(
+          limit=pageSize,
+          cursor=cursor,
           types=types,
           exclude_archived=exclude_archived
-        )
-        returned_channels = response.body['channels']
-        next_cursor = response.body['response_metadata']['next_cursor']
+        ).body
+    def processItemPage(items: List[MutableMapping[str, Any]]) -> None:
         if (get_members):
             # think maybe need to retrieve channel memberships for the slack-export-viewer to work
-            for n in range(0, len(returned_channels)):
-                returned_channels[n]["members"] = getChannelMembers(returned_channels[n])
-                print("Retrieved members of {0}".format(returned_channels[n]['name']))
-        channels.extend(returned_channels)
-        sleep(3.05)
-    return channels
+            for channel in items:
+                channel["members"] = getChannelMembers(channel)
+                print("Retrieved members of {0}".format(channel['name']))
+        # sleep(3.05)
+
+    return paginatedRequest(getResponse, 'channels', processItemPage)
 
 # Since Slacker does not Cache.. populate some reused lists
 def bootstrapKeyValues(args):
